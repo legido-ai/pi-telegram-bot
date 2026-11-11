@@ -31,7 +31,7 @@ SERVICE = """
       TTS_API_KEY: local
       TTS_MODEL: piper
       TTS_VOICE: es-ES-ElviraNeural
-      TTS_MODE: auto
+      TTS_MODE: off
     volumes:
       - pi-telegram-bot-data:/data
       - pi-workspace:/workspace

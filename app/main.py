@@ -40,6 +40,7 @@ async def run() -> None:
     app.add_handler(CommandHandler("stop", bridge.cmd_stop))
     app.add_handler(CommandHandler("status", bridge.cmd_status))
     app.add_handler(CommandHandler("tts", bridge.cmd_tts))
+    app.add_handler(CommandHandler("say", bridge.cmd_say))
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO | filters.VIDEO_NOTE, bridge.on_voice))
     app.add_handler(MessageHandler((filters.TEXT | filters.CAPTION) & ~filters.COMMAND, bridge.on_text))
 

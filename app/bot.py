@@ -297,5 +297,36 @@ class Bridge:
         self.store.set("ttsMode", value)
         await update.effective_message.reply_text(f"tts: {value}")
 
+    async def cmd_say(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Explicit audio: /say [voice] text — nothing but the voice note."""
+        message = update.effective_message
+        text = " ".join(context.args or []).strip()
+        if not text:
+            await message.reply_text("Use /say <text>  ·  /say en <text>  ·  /say <voice-name> <text>")
+            return
+        if not self.speech.tts_enabled:
+            await message.reply_text("TTS is not configured (TTS_API_URL is empty).")
+            return
+        voice = self.settings.tts_voice
+        first, _, rest = text.partition(" ")
+        if rest and first.lower() in {"en", "es", "english", "spanish"}:
+            voice = "en-US-AriaNeural" if first.lower() in {"en", "english"} else "es-ES-ElviraNeural"
+            text = rest
+        elif rest and ("-" in first and first.count("-") >= 2):
+            voice = first
+            text = rest
+        try:
+            audio, kind = await self.speech.synthesize(text[:1500], voice=voice)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("tts failed: %s", exc)
+            await message.reply_text("I could not synthesize that audio.")
+            return
+        stream = io.BytesIO(audio)
+        stream.name = f"say.{kind}"
+        if kind == "ogg":
+            await message.reply_voice(voice=stream)
+        else:
+            await message.reply_audio(audio=stream, title="Pi")
+
     async def cmd_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await self.cmd_start(update, context)

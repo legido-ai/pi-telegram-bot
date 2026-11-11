@@ -44,3 +44,8 @@ never lands in the image.
 ```bash
 docker build -t pi-telegram-bot:current .
 ```
+
+## Icon
+
+`assets/icon.svg` is the source; `assets/icon.png` (512×512) is what the bot
+uses as its profile photo (`setMyProfilePhoto`).

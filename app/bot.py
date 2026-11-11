@@ -158,6 +158,7 @@ class Bridge:
 
         async def job() -> None:
             note = await message.reply_text("Transcribing…")
+            path = ""
             try:
                 handle = await context.bot.get_file(media.file_id)
                 path = os.path.join(self.settings.data_dir, f"voice-{media.file_unique_id}.oga")
@@ -168,10 +169,11 @@ class Bridge:
                 await note.edit_text("I could not transcribe that audio.")
                 return
             finally:
-                try:
-                    os.remove(path)
-                except OSError:
-                    pass
+                if path:
+                    try:
+                        os.remove(path)
+                    except OSError:
+                        pass
             if not transcript:
                 await note.edit_text("The audio was empty after transcription.")
                 return

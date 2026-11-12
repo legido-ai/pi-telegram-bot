@@ -45,6 +45,12 @@ never lands in the image.
 docker build -t pi-telegram-bot:current .
 ```
 
+## Container image
+
+Every push to `main` builds and publishes
+`ghcr.io/legido-ai/pi-telegram-bot:latest` (plus a short-sha tag) from
+`.github/workflows/ghcr.yml`. The image is public.
+
 ## Icon
 
 `assets/icon.svg` is the source; `assets/icon.png` (512×512) is what the bot

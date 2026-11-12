@@ -77,6 +77,22 @@ class PiSession:
         )
         self._reader = asyncio.create_task(self._read_stdout())
         self._stderr = asyncio.create_task(self._read_stderr())
+        self._reader.add_done_callback(self._reader_done)
+        self._stderr.add_done_callback(self._stderr_done)
+
+    def _reader_done(self, task: asyncio.Task) -> None:
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            log.error("pi stdout reader stopped: %s", exc, exc_info=exc)
+
+    def _stderr_done(self, task: asyncio.Task) -> None:
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            log.error("pi stderr reader stopped: %s", exc, exc_info=exc)
 
     async def _read_stderr(self) -> None:
         assert self._proc and self._proc.stderr
@@ -86,48 +102,62 @@ class PiSession:
     async def _read_stdout(self) -> None:
         assert self._proc and self._proc.stdout
         buffer = b""
-        while True:
-            chunk = await self._proc.stdout.read(65536)
-            if not chunk:
-                break
-            buffer += chunk
-            while b"\n" in buffer:
-                raw, buffer = buffer.split(b"\n", 1)
-                if not raw.strip():
-                    continue
-                try:
-                    record = json.loads(raw.decode("utf-8", "replace"))
-                except json.JSONDecodeError:
-                    log.warning("pi sent a non-JSON line")
-                    continue
-                self._dispatch(record)
-        for future in self._pending.values():
-            if not future.done():
-                future.set_exception(PiError("pi exited"))
-        self._pending.clear()
-        if self._settled and not self._settled.is_set():
-            self._settled.set()
+        try:
+            while True:
+                chunk = await self._proc.stdout.read(65536)
+                if not chunk:
+                    break
+                buffer += chunk
+                while b"\n" in buffer:
+                    raw, buffer = buffer.split(b"\n", 1)
+                    if not raw.strip():
+                        continue
+                    try:
+                        record = json.loads(raw.decode("utf-8", "replace"))
+                    except json.JSONDecodeError:
+                        log.warning("pi sent a non-JSON line")
+                        continue
+                    try:
+                        self._dispatch(record)
+                    except Exception:  # noqa: BLE001
+                        log.exception("pi event handling failed; ignoring record")
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            self._last_error = f"pi output reader failed: {exc}"
+            log.exception("pi stdout reader crashed")
+        finally:
+            for future in self._pending.values():
+                if not future.done():
+                    future.set_exception(PiError(self._last_error or "pi exited"))
+            self._pending.clear()
+            if self._settled and not self._settled.is_set():
+                self._settled.set()
 
-    def _dispatch(self, record: dict) -> None:
+    def _dispatch(self, record: object) -> None:
+        if not isinstance(record, dict):
+            log.warning("pi sent a non-object record (%s)", type(record).__name__)
+            return
         kind = record.get("type")
         if kind == "response":
             future = self._pending.pop(str(record.get("id")), None)
             if future and not future.done():
                 if record.get("success"):
-                    future.set_result(record.get("data") or {})
+                    data = record.get("data")
+                    future.set_result(data if isinstance(data, dict) else {})
                 else:
                     future.set_exception(PiError(record.get("error") or "command failed"))
             return
         if kind == "message_update":
-            event = record.get("assistantMessageEvent") or {}
-            if event.get("type") == "text_delta" and event.get("delta"):
+            event = record.get("assistantMessageEvent")
+            if isinstance(event, dict) and event.get("type") == "text_delta" and event.get("delta"):
                 self._text.append(event["delta"])
                 if self._on_delta:
                     self._on_delta(event["delta"])
             return
         if kind == "message_end":
-            message = record.get("message") or {}
-            if message.get("role") == "assistant" and message.get("errorMessage"):
+            message = record.get("message")
+            if isinstance(message, dict) and message.get("role") == "assistant" and message.get("errorMessage"):
                 self._last_error = str(message["errorMessage"])
             return
         if kind == "agent_settled" and self._settled:

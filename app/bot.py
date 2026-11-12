@@ -196,43 +196,70 @@ class Bridge:
         placeholder = await message.reply_text("…")
         buffer: list[str] = []
         last_edit = 0.0
+        started = time.monotonic()
         stop = asyncio.Event()
+
+        async def keep_typing() -> None:
+            # Telegram clears the typing indicator after ~5 s. Refresh it for
+            # the whole turn so a slow tool call never looks like a dead bot.
+            while not stop.is_set():
+                try:
+                    await context.bot.send_chat_action(chat.id, ChatAction.TYPING)
+                except Exception:  # noqa: BLE001
+                    pass
+                await asyncio.sleep(4)
 
         async def pump() -> None:
             nonlocal last_edit
             while not stop.is_set():
                 await asyncio.sleep(0.4)
                 text = "".join(buffer)
-                if text and time.monotonic() - last_edit >= EDIT_INTERVAL:
-                    last_edit = time.monotonic()
+                now = time.monotonic()
+                if text and now - last_edit >= EDIT_INTERVAL:
+                    last_edit = now
                     try:
                         await placeholder.edit_text(text[:MAX_MESSAGE])
                     except BadRequest:
                         pass
+                elif not text and now - started >= 8 and now - last_edit >= 5:
+                    # No streamed text yet: show elapsed time instead of "…".
+                    last_edit = now
+                    try:
+                        await placeholder.edit_text(f"⏳ Working… {int(now - started)}s")
+                    except BadRequest:
+                        pass
 
+        typing_task = asyncio.create_task(keep_typing())
         pump_task = asyncio.create_task(pump())
-        await context.bot.send_chat_action(chat.id, ChatAction.TYPING)
+        log.info("prompt started chat=%s", chat.id)
         try:
             answer = await session.prompt(prompt, on_delta=buffer.append)
         except PiError as exc:
             stop.set()
             pump_task.cancel()
+            typing_task.cancel()
             await placeholder.edit_text(f"Pi error: {exc}"[:MAX_MESSAGE])
             return
         except Exception as exc:  # noqa: BLE001
             log.exception("prompt failed")
             stop.set()
             pump_task.cancel()
+            typing_task.cancel()
             await placeholder.edit_text(f"Pi failed: {exc}"[:MAX_MESSAGE])
             return
         stop.set()
         pump_task.cancel()
+        typing_task.cancel()
+        log.info("prompt done chat=%s chars=%d", chat.id, len(answer))
         answer = answer or "(empty answer)"
         chunks = split_text(answer)
         try:
             await placeholder.edit_text(chunks[0], parse_mode=ParseMode.MARKDOWN)
         except BadRequest:
-            await placeholder.edit_text(chunks[0])
+            try:
+                await placeholder.edit_text(chunks[0])
+            except BadRequest:
+                pass
         for chunk in chunks[1:]:
             try:
                 await message.reply_text(chunk, parse_mode=ParseMode.MARKDOWN)

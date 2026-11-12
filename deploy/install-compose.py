@@ -1,8 +1,8 @@
 SERVICE = """
   pi:
     # Pi has no HTTP server: this bridge owns one `pi --mode rpc` child per
-    # chat/topic (see pi/README.md).
-    image: ${PI_BOT_IMAGE:-pi:current}
+    # chat/topic (see pi-telegram-bot/README.md).
+    image: ${PI_BOT_IMAGE:-pi-telegram-bot:current}
     container_name: pi
     hostname: pi
     restart: unless-stopped

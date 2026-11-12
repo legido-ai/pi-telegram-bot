@@ -42,7 +42,7 @@ never lands in the image.
 ## Local build
 
 ```bash
-docker build -t pi-telegram-bot:current .
+docker build -t pi:current .
 ```
 
 ## Icon

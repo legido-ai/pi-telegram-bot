@@ -1,10 +1,10 @@
 SERVICE = """
-  pi-telegram-bot:
+  pi:
     # Pi has no HTTP server: this bridge owns one `pi --mode rpc` child per
     # chat/topic (see pi-telegram-bot/README.md).
-    image: ${PI_BOT_IMAGE:-pi-telegram-bot:current}
-    container_name: pi-telegram-bot
-    hostname: pi-telegram-bot
+    image: ${PI_BOT_IMAGE:-pi:current}
+    container_name: pi
+    hostname: pi
     restart: unless-stopped
     init: true
     networks: [default]
@@ -33,7 +33,7 @@ SERVICE = """
       TTS_VOICE: es-ES-ElviraNeural
       TTS_MODE: off
     volumes:
-      - pi-telegram-bot-data:/data
+      - pi-data:/data
       - pi-workspace:/workspace
     healthcheck:
       test: ["CMD-SHELL", "python -c \\"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=4).status==200 else 1)\\""]
@@ -43,7 +43,7 @@ SERVICE = """
       start_period: 30s
 """
 
-VOLUMES = """  pi-telegram-bot-data: {name: pi-telegram-bot-data, external: true}
+VOLUMES = """  pi-data: {name: pi-data, external: true}
   pi-workspace: {name: pi-workspace, external: true}
 """
 
@@ -53,8 +53,8 @@ import sys
 path = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "/srv/work/agentic-architecture/box/compose.yml")
 text = path.read_text()
 
-if "pi-telegram-bot:" in text:
-    print("compose already has pi-telegram-bot; nothing to do")
+if "container_name: pi\n" in text:
+    print("compose already has the pi service; nothing to do")
     sys.exit(0)
 
 marker = "\nvolumes:\n"

@@ -30,6 +30,18 @@ def conversation_key(update: Update) -> str:
     return f"{chat.id}:{thread or 0}"
 
 
+def format_elapsed(seconds: float) -> str:
+    """Elapsed time for the status bubble: 42s, then 4m 58s, then 1h 02m 03s."""
+    total = max(0, int(seconds))
+    if total < 60:
+        return f"{total}s"
+    minutes, secs = divmod(total, 60)
+    if minutes < 60:
+        return f"{minutes}m {secs:02d}s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h {minutes:02d}m {secs:02d}s"
+
+
 def split_text(text: str, size: int = MAX_MESSAGE) -> list[str]:
     if len(text) <= size:
         return [text]
@@ -225,7 +237,7 @@ class Bridge:
                     # No streamed text yet: show elapsed time instead of "…".
                     last_edit = now
                     try:
-                        await placeholder.edit_text(f"⏳ Working… {int(now - started)}s")
+                        await placeholder.edit_text(f"⏳ Working… {format_elapsed(now - started)}")
                     except BadRequest:
                         pass
 
